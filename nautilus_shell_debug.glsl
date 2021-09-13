@@ -13,7 +13,7 @@ float mapShell(in vec3 p0) {
     const float b = 0.17;
 
     float r = length(p.xy);
-    float a = mix(0.0, 0.5, smoothstep(0.0, 1.0, 0.5*(r-0.6)));
+    float a = mix(0.0, 0.45, smoothstep(0.0, 1.0, 0.5*(r-0.6)));
     p.xy = mat2(cos(a),-sin(a),sin(a),cos(a))*p.xy;
     float t = atan(p.y, p.x);
     
@@ -46,7 +46,7 @@ float mapShell(in vec3 p0) {
     float s0 = t + 2.0*PI*(n0+0.5);
     float v = fract(n);
     float s = f*s0 + 1.0*pow(0.25-(v-0.5)*(v-0.5), 0.5)+0.5*v;
-    s += 0.5/(40.0*length(vec2(v-0.5,p.z))+1.0);
+    s += pow(min(1.0/(40.0*length(vec2(v-0.5,p.z))+1.0), 0.5), 2.0);
     float sf = fract(s);
     sf = s0>-1.8 ? abs(s+3.25) : min(sf, 1.0-sf);
     float w = sf/f*exp(b*(s0+PI));
