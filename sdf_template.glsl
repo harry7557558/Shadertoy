@@ -22,8 +22,8 @@ vec3 mapNormal(vec3 p) {
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 
-    float rx = iMouse.z>0.?3.14*(iMouse.y/iResolution.y)-1.57:0.3;
-    float rz = iMouse.z>0.?-iMouse.x/iResolution.x*4.0*3.14:0.5*iTime-2.0;
+    float rx = iMouse.z!=0.?3.14*(iMouse.y/iResolution.y)-1.57:0.3;
+    float rz = iMouse.z!=0.?-iMouse.x/iResolution.x*4.0*3.14:0.5*iTime-2.0;
 
     vec3 w = vec3(cos(rx)*vec2(cos(rz),sin(rz)), sin(rx));
     vec3 u = vec3(-sin(rz),cos(rz),0);
