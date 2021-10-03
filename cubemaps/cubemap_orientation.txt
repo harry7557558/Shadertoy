@@ -1,0 +1,6 @@
+0: flipped, pz
+1: flipped, py
+2: rotate right, nx
+3: same, ny
+4: rotate left, px
+5: same, nz
