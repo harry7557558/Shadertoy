@@ -5,16 +5,38 @@
 
 
 
+// Left: without importance sampling
+// Right: with importance sampling for GGX normal
+// The two versions look slightly different. Should be the same.
+
+// if there is no bug with GGX importance sampling,
+// left and right should be the same when this is set to 1
+#define DEBUG_GGX 0
+
+// References:
+// http://www.codinglabs.net/article_physically_based_rendering_cook_torrance.aspx
+// https://pbr-book.org/3ed-2018/Reflection_Models/Microfacet_Models
+// https://agraphicsguy.wordpress.com/2015/11/01/sampling-microfacet-brdf/
+// https://www.shadertoy.com/view/3slSzn
+// https://computergraphics.stackexchange.com/questions/4394/path-tracing-the-cook-torrance-brdf
+
+// A Desmos implementation of the BRDF:
+// https://www.desmos.com/calculator/zccocbuygk
+
+
+#define PI 3.1415926
+#define ZERO min(iTime,0.)
+
+
+// random number generator
 uint seed = 0u;
 uint randu() { return seed = seed * 1664525u + 1013904223u; }
 float rand01() { return float(randu()) * (1./4294967296.); }
 
-#define PI 3.1415926
 
-
+// cubemap lighting
 vec3 light(vec3 rd) {
     vec3 col = texture(iChannel1, rd).xyz;
-    //return col;
     vec3 bri = vec3(1.0) + vec3(2.0) * pow(max(dot(rd, normalize(vec3(-0.2, -0.5, 0.5))), 0.), 4.);
     return col * bri;
 }
@@ -36,6 +58,8 @@ bool intersectSphere(vec3 o, float r, vec3 ro, vec3 rd,
     return true;
 }
 
+
+// sample hemisphere distributions
 vec3 sampleCosWeighted(vec3 n) {
     vec3 u = normalize(cross(n, vec3(1.2345, 2.3456, -3.4561)));
     vec3 v = cross(u, n);
@@ -45,7 +69,6 @@ vec3 sampleCosWeighted(vec3 n) {
     float rz = sqrt(1. - rn);
     return rh.x * u + rh.y * v + rz * n;
 }
-
 vec3 sampleUniformHemisphere(vec3 n) {
     vec3 u = normalize(cross(n, vec3(1.2345, 2.3456, -3.4561)));
     vec3 v = cross(u, n);
@@ -56,54 +79,14 @@ vec3 sampleUniformHemisphere(vec3 n) {
 }
 
 
-
-
-// from https://www.shadertoy.com/view/3slSzn
-float evalBRDF(vec3 wo, vec3 wi, float f0, float alpha) {
-    float cos_theta_o = wo.z;
-    float cos_theta_i = wi.z;
-    vec3 h = normalize(wi+wo);
-    float cos_theta_h = h.z;
-    float cos_theta = dot(wo,h);
-
-    // GGX
-    float alpha2 = alpha * alpha;
-    float ggx_denom = cos_theta_h * cos_theta_h * (alpha2 - 1.0) + 1.0;
-    float D = alpha2 / (PI * ggx_denom * ggx_denom);
-
-    // Geometry
-    float k = alpha + 1.0;
-    k *= k * 0.125;
-    float gl = cos_theta_i / (cos_theta_i * (1.0 - k) + k);
-    float gv = cos_theta_o / (cos_theta_o * (1.0 - k) + k);
-    float G = gl * gv;
-
-    // Fresnel
-    float F = f0 + (1.0-f0)*pow(1.0-cos_theta,5.0);
-
-    // Put all together
-    float denom = 4.0*cos_theta_i*cos_theta_o + 1e-4;
-    return D*G*F / denom;
-}
-
-
-// returns weight, Fr divided by PDF
-float sampleLambertianSimple(in vec3 wi, in float alpha, out vec3 wo) {
-    wo = sampleUniformHemisphere(vec3(0, 0, 1));
-    return (1.0/PI) / (1.0/(2.0*PI));
-}
-float sampleLambertianImportance(in vec3 wi, in float alpha, out vec3 wo) {
-    wo = sampleCosWeighted(vec3(0, 0, 1));
-    return (1.0/PI) / (wo.z/PI);
-}
+// sample GGX, return weight (Fr divided by PDF)
+// At least one of the two functions have a bug
 float sampleGgxSimple(in vec3 wi, in float alpha, out vec3 wo) {
-    //wo = sampleUniformHemisphere(vec3(0, 0, 1));
-    wo = sampleCosWeighted(vec3(0, 0, 1));
+    wo = sampleUniformHemisphere(vec3(0, 0, 1));
     vec3 m = normalize(wi+wo);
     float denom = (alpha*alpha-1.)*m.z*m.z+1.;
     float Fr = alpha*alpha / (PI * denom*denom);
-    //return Fr / (1.0/(2.0*PI));
-    return Fr / (wo.z/PI);
+    return Fr / (1.0/(2.0*PI));
 }
 float sampleGgxImportance(in vec3 wi, in float alpha, out vec3 wo) {
     float su = 2.0*PI*rand01();
@@ -116,64 +99,84 @@ float sampleGgxImportance(in vec3 wi, in float alpha, out vec3 wo) {
 }
 
 
+// as global variable
+bool ImportanceSampling;
 
 
+// return random output ray direction, multiply m_col by weight
+vec3 sampleCookTorrance(
+    vec3 wi, vec3 n,
+    float alpha,  // roughness
+    float f0,  // ratio of reflection along the normal
+    float lambertian,  // ratio of lambertian coefficient
+    vec3 lambert_col,  // lambertian color
+    vec3 microfacet_col,  // microfacet color
+    inout vec3 m_col
+    ) {
 
-bool Right;  // importance sampling
+#if !DEBUG_GGX
+    if (ImportanceSampling) {
+        if (rand01() < lambertian) {
+            vec3 wo = sampleCosWeighted(n);
+            m_col *= lambert_col;
+            return wo;
+        }
+    }
+#endif
 
-vec3 sampleCookTorrance(vec3 wi, vec3 n, float alpha, float f0, inout vec3 m_col) {
     vec3 u = normalize(cross(n, vec3(1.2345, 2.3456, -3.4561)));
     vec3 v = cross(u, n);
     wi = vec3(dot(wi, u), dot(wi, v), dot(wi, n));
     vec3 wo, m;  // out and half vector
-    float D, G, F;
 
-    // GGX
-    if (Right) D = sampleGgxImportance(wi, alpha, wo);
+    // GGX divided by PDF
+    float D;
+    if (ImportanceSampling) D = sampleGgxImportance(wi, alpha, wo);
     else D = sampleGgxSimple(wi, alpha, wo);
-    m_col *= 0.25*D*wo.z; return wo.x * u + wo.y * v + wo.z * n;
-    m = normalize(wi+wo);
-#if 0
-    if (Right) {
-        sampleGgxSimple(wi, alpha, wo);
-        D = evalBRDF(wi, wo, f0, alpha) / (1.0/(2.0*PI));
-        m_col *= D * wo.z;
-        return wo.x * u + wo.y * v + wo.z * n;
-    }
+    // uncomment to see if lambert sampling is ok
+    //D = sampleGgxSimple(wi, alpha, wo);
+
+    // debug GGX importance sampling
+#if DEBUG_GGX
+    m_col *= 0.25*D*wo.z; return wo.x*u+wo.y*v+wo.z*n;
 #endif
+    m = normalize(wi+wo);
 
     // Geometry
     float tan2_theta_i = (1.0-wi.z*wi.z)/(wi.z*wi.z);
     float tan2_theta_o = (1.0-wo.z*wo.z)/(wo.z*wo.z);
     float lambda_i = 0.5*(sqrt(1.0+alpha*alpha*tan2_theta_i)-1.0);
     float lambda_o = 0.5*(sqrt(1.0+alpha*alpha*tan2_theta_o)-1.0);
-    G = 1.0/(1.0+lambda_i+lambda_o);
+    float G = 1.0/(1.0+lambda_i+lambda_o);
 
     // Fresnel
-    F = f0 + (1.0-f0)*pow(1.0-dot(wi, m), 5.0);
+    float F = f0 + (1.0-f0)*pow(1.0-dot(wi, m), 5.0);
 
     // Put all together
     float Fr = D*G*F / (4.0*wi.z*wo.z+1e-4);
-    float Fr_cos = Fr * wo.z;  // wo is the direction of light
-    m_col *= Fr_cos;
+    float Fr_cos = Fr * wo.z;  // wo is the direction of light in path tracing
+    if (ImportanceSampling) {
+        m_col *= Fr_cos * microfacet_col;
+    }
+    else {
+        vec3 col = lambertian * lambert_col / (1.0/2.0) + (1.0-lambertian) * microfacet_col * Fr;
+        m_col *= col * wo.z;
+    }
     return wo.x * u + wo.y * v + wo.z * n;
 }
 
 
-
+// path tracing
 vec3 mainRender(vec3 ro, vec3 rd) {
 
-    const int background = 0;
-    const int lambertian = 1;
-    const int ggx_diffuse = 2;
-    const int ggx_medium = 3;
-    const int ggx_glossy = 4;
-    const int ggx_specular = 5;
+    const int background = -1;
+    const int lambertian = 0;
+    const int mat_floor = 1;
 
     vec3 m_col = vec3(1.0), col;
     bool is_inside = false;
 
-    for (int step = 0; step < 64; step++) {
+    for (int step = int(ZERO); step < 64; step++) {
         ro += 1e-4f*rd;
         vec3 n, min_n;
         float t, min_t = 1e12;
@@ -185,12 +188,11 @@ vec3 mainRender(vec3 ro, vec3 rd) {
             min_t = t, min_n = vec3(0, 0, 1);
             col = vec3(0.9, 0.95, 0.98);
             //material = lambertian;
-            material = ggx_medium;
+            material = mat_floor;
         }
 
         // objects
-    #if 0
-        for (float i = 0.; i < 4.; i++) {
+        for (float i = 0.; i < 6.; i++) {
             t = min_t;
             vec3 pos = vec3(2.2*vec2(cos(2.*PI*i/6.), sin(2.*PI*i/6.)), 1.0+1e-4);
             if (intersectSphere(pos, 1.0, ro, rd, t, n)) {
@@ -199,42 +201,32 @@ vec3 mainRender(vec3 ro, vec3 rd) {
                 material = int(i)+2;
             }
         }
-    #endif
 
         // update ray
         if (material == background) {
             col = light(rd);
             return m_col * col;
         }
-        m_col *= col;
-        min_n = dot(rd, min_n) < 0. ? min_n : -min_n;
         ro = ro + rd * min_t;
-        if (material == lambertian) {
-            rd = sampleCosWeighted(min_n);
-        }
-        if (material == ggx_diffuse) {
-            rd = sampleCookTorrance(-rd, min_n, 0.8, 0.4, m_col);
-        }
-        if (material == ggx_medium) {
-            rd = sampleCookTorrance(-rd, min_n, 0.4, 0.4, m_col);
-        }
-        if (material == ggx_glossy) {
-            rd = sampleCookTorrance(-rd, min_n, 0.1, 0.4, m_col);
-        }
-        if (material == ggx_specular) {
-            rd = sampleCookTorrance(-rd, min_n, 0.02, 0.4, m_col);
-        }
+        min_n = dot(rd, min_n) < 0. ? min_n : -min_n;
+        if (material == lambertian) rd = sampleCosWeighted(min_n), m_col *= col;
+        if (material == mat_floor) rd = sampleCookTorrance(-rd, min_n, 0.3, 0.4, 0.2, col, col, m_col);
+        if (material == 2) rd = sampleCookTorrance(-rd, min_n, 0.8, 0.4, 0.0, vec3(1.0), col, m_col);
+        if (material == 3) rd = sampleCookTorrance(-rd, min_n, 0.4, 0.4, 0.0, vec3(1.0), col, m_col);
+        if (material == 4) rd = sampleCookTorrance(-rd, min_n, 0.1, 0.4, 0.0, vec3(1.0), col, m_col);
+        if (material == 5) rd = sampleCookTorrance(-rd, min_n, .02, 0.4, 0.0, vec3(1.0), col, m_col);
+        if (material == 6) rd = sampleCookTorrance(-rd, min_n, 0.1, 0.4, 0.5, vec3(0.8,0.4,0.1), vec3(1.0), m_col);
+        if (material == 7) rd = sampleCookTorrance(-rd, min_n, .01, 0.4, 0.2, vec3(0.8,1.0,0.8), vec3(0.6,0.6,1.0), m_col);
         if (m_col == vec3(0.0)) break;
         if (dot(rd, min_n) < 0.0) is_inside = !is_inside;
-        if (is_inside) return vec3(1, 0, 0);  // should never happen
+        if (is_inside) return vec3(1, 0, 0);  // should not happen
     }
     return m_col;
 }
 
 
-
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-    Right = fragCoord.x > 0.5*iResolution.x;
+    ImportanceSampling = fragCoord.x > 0.5*iResolution.x;
 
     // https://www.shadertoy.com/view/4djSRW by David Hoskins, MIT licence
     vec3 p3 = fract(vec3(fragCoord, iFrame) * .1031);
