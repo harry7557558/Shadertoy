@@ -7,7 +7,8 @@
 // green-pink: surface gradient lower/higher than 1
 
 #define PI 3.1415926
-#define ZERO min(iTime,0.)
+//#define ZERO min(iTime,0.)
+#define ZERO 0.0
 
 
 float smin(float a, float b, float k) {
@@ -41,6 +42,7 @@ vec3 sdfGrad(in vec3 p, in float e) {
 // raymarching parameters
 #define BOX_RADIUS vec3(3.0, 2.0, 2.0)
 #define STEP 0.1
+#define MIN_STEP 0.005
 #define MAX_STEP 200.
 
 // rendering parameters
@@ -59,16 +61,16 @@ vec3 light = normalize(vec3(0.5,0.5,1.0));
 
 // colormaps - https://www.shadertoy.com/view/NsSSRK
 vec3 colorSdf(float t) {
-  float r = .385+.619*t+.238*cos(4.903*t-2.61);
-  float g = -5.491+.959*t+6.089*cos(.968*t-.329);
-  float b = 1.107-.734*t+.172*cos(6.07*t-2.741);
-  return clamp(vec3(r, g, b), 0.0, 1.0);
+    float r = .385+.619*t+.238*cos(4.903*t-2.61);
+    float g = -5.491+.959*t+6.089*cos(.968*t-.329);
+    float b = 1.107-.734*t+.172*cos(6.07*t-2.741);
+    return clamp(vec3(r, g, b), 0.0, 1.0);
 }
 vec3 colorNormal(float t) {
-  float r = .529-.054*t+.55*cos(5.498*t+2.779);
-  float g = .21+.512*t+.622*cos(4.817*t-1.552);
-  float b = .602-.212*t+.569*cos(5.266*t+2.861);
-  return clamp(vec3(r, g, b), 0.0, 1.0);
+    float r = .529-.054*t+.55*cos(5.498*t+2.779);
+    float g = .21+.512*t+.622*cos(4.817*t-1.552);
+    float b = .602-.212*t+.569*cos(5.266*t+2.861);
+    return clamp(vec3(r, g, b), 0.0, 1.0);
 }
 
 
@@ -92,7 +94,9 @@ vec3 render(in vec3 ro, in vec3 rd, float t0, float t1) {
         float absorb = FIELD_EMISSION+DISCONTINUITY_OPACITY*max(-grad_abs,0.0);
         totabs *= exp(-absorb*dt);
         totcol += col*absorb*totabs*dt;
-        if ((dt=min(STEP,abs(v_old=v))) < 1e-3) break;
+        dt = min(abs(v_old=v), STEP);
+        //if (dt < 1e-3) break;
+        dt = max(dt, MIN_STEP);
     }
     if (v*v_old<0.) {
         for (int s = int(ZERO); s < 4; s += 1) {
@@ -104,7 +108,8 @@ vec3 render(in vec3 ro, in vec3 rd, float t0, float t1) {
         }
     }
     vec3 grad = sdfGrad(ro+rd*t, 1e-3);
-    vec3 col = colorNormal(0.5+0.5*tanh(SURFACE_GRADIENT*(0.5*length(grad)-0.5)));
+    float grad_col = SURFACE_GRADIENT*(0.5*length(grad)-0.5);
+    vec3 col = colorNormal(1.0-1.0/(1.0+exp(2.0*grad_col)));  // 0.5+0.5*tanh(grad_col)
     col = 0.2+0.05*grad.y+col*max(dot(normalize(grad), light),0.0);
     return totcol + col * totabs;
 }
