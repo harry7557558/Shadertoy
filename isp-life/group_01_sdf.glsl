@@ -41,6 +41,14 @@ float sdEllipsoid(vec3 p, vec3 r) {
     return k1*(k1-1.0)/k2;
 }
 float sdTorus(vec3 p, float R, float r) {
+    vec2 q = vec2(length(p.xy)-R,p.z);
+    return length(q)-r;
+}
+float sdCapsuleY(vec3 p, float h, float r) {
+    p.y = abs(p.y)-min(abs(p.y), h);
+    return length(p) - r;
+}
+float sdTorusY(vec3 p, float R, float r) {
     vec2 q = vec2(length(p.xz)-R,p.y);
     return length(q)-r;
 }
@@ -111,14 +119,14 @@ float hash12(vec2 p) {
     return fract((p3.x + p3.y) * p3.z);
 }
 vec2 hash22(vec2 p) {
-	vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973));
+    vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973));
     p3 += dot(p3, p3.yzx+33.33);
     return fract((p3.xx+p3.yz)*p3.zy);
 }
 vec3 hash33(vec3 p3) {
-	p3 = fract(p3 * vec3(.1031, .1030, .0973));
-	p3 += dot(p3, p3.yxz + 33.33);
-	return fract((vec3(p3.x, p3.x, p3.y) + vec3(p3.y, p3.z, p3.z))*p3.zyx);
+    p3 = fract(p3 * vec3(.1031, .1030, .0973));
+    p3 += dot(p3, p3.yxz + 33.33);
+    return fract((vec3(p3.x, p3.x, p3.y) + vec3(p3.y, p3.z, p3.z))*p3.zyx);
 }
 
 // hash-based random functions
@@ -147,25 +155,25 @@ float GradientNoise2D(vec2 xy) {
     return v00 + (v10 - v00)*xf + (v01 - v00)*yf + (v00 + v11 - v01 - v10) * xf*yf;
 }
 float SimplexNoise3D(vec3 xyz) {
-	const float K1 = 0.3333333333;
-	const float K2 = 0.1666666667;
-	vec3 p = xyz + (xyz.x + xyz.y + xyz.z)*K1;
-	vec3 i = floor(p);
-	vec3 f0 = xyz - (i - (i.x + i.y + i.z)*K2);
-	//vec3f e = step(f0.yzx(), f0);  // possibly result in degenerated simplex
-	vec3 e = vec3(f0.y > f0.x ? 0.0 : 1.0, f0.z >= f0.y ? 0.0 : 1.0, f0.x > f0.z ? 0.0 : 1.0);
-	vec3 i1 = e * (vec3(1.0) - e.zxy);
-	vec3 i2 = vec3(1.0) - e.zxy * (vec3(1.0) - e);
-	vec3 f1 = f0 - i1 + K2;
-	vec3 f2 = f0 - i2 + 2.0*K2;
-	vec3 f3 = f0 - 1.0 + 3.0*K2;
-	vec3 n0 = 2.0 * hash33(i) - 1.0;
-	vec3 n1 = 2.0 * hash33(i + i1) - 1.0;
-	vec3 n2 = 2.0 * hash33(i + i2) - 1.0;
-	vec3 n3 = 2.0 * hash33(i + 1.0) - 1.0;
-	vec4 v = vec4(dot(f0, n0), dot(f1, n1), dot(f2, n2), dot(f3, n3));
-	vec4 w = max(-vec4(dot(f0, f0), dot(f1, f1), dot(f2, f2), dot(f3, f3)) + 0.5, vec4(0.0));
-	return dot((w*w*w*w) * v, vec4(32.0));
+    const float K1 = 0.3333333333;
+    const float K2 = 0.1666666667;
+    vec3 p = xyz + (xyz.x + xyz.y + xyz.z)*K1;
+    vec3 i = floor(p);
+    vec3 f0 = xyz - (i - (i.x + i.y + i.z)*K2);
+    //vec3f e = step(f0.yzx(), f0);  // possibly result in degenerated simplex
+    vec3 e = vec3(f0.y > f0.x ? 0.0 : 1.0, f0.z >= f0.y ? 0.0 : 1.0, f0.x > f0.z ? 0.0 : 1.0);
+    vec3 i1 = e * (vec3(1.0) - e.zxy);
+    vec3 i2 = vec3(1.0) - e.zxy * (vec3(1.0) - e);
+    vec3 f1 = f0 - i1 + K2;
+    vec3 f2 = f0 - i2 + 2.0*K2;
+    vec3 f3 = f0 - 1.0 + 3.0*K2;
+    vec3 n0 = 2.0 * hash33(i) - 1.0;
+    vec3 n1 = 2.0 * hash33(i + i1) - 1.0;
+    vec3 n2 = 2.0 * hash33(i + i2) - 1.0;
+    vec3 n3 = 2.0 * hash33(i + 1.0) - 1.0;
+    vec4 v = vec4(dot(f0, n0), dot(f1, n1), dot(f2, n2), dot(f3, n3));
+    vec4 w = max(-vec4(dot(f0, f0), dot(f1, f1), dot(f2, f2), dot(f3, f3)) + 0.5, vec4(0.0));
+    return dot((w*w*w*w) * v, vec4(32.0));
 }
 
 
@@ -196,6 +204,8 @@ vec4 mapFlower01(vec3 p, bool col_required) {
     if (col_required) {
         float t = 0.5+0.5*cos(10.0*a_)-exp(-4.0*(r-0.5));
         petal_c = mix(vec3(0.8,0.55,0.65), vec3(0.85,0.7,0.8), smoothstep(0.,1.,t));
+        t = sdSegment(q.xy, vec2(-1.0,0.0), vec2(0.5,0.0))-0.05*exp(-2.0*r);
+        petal_c = mix(vec3(0.9,0.25,0.25), petal_c, 0.7+0.3*smootherstep(8.0*t));
     }
     vec4 petal = vec4(petal_c, petal_d);
     // style/sepal
@@ -221,7 +231,6 @@ vec4 mapFlower01(vec3 p, bool col_required) {
         sdEllipsoid(q-vec3(0.02,0,h), vec3(0.08,0.04,0.05)));
     // put all together
     vec4 d = cmin(smin(petal, leaf, 0.05-0.03*exp(-r)), smin(filament, anther, 0.01)-0.005);
-    //d = max(d, p.y);
     return d;
 }
 
@@ -260,6 +269,7 @@ vec4 mapFlower02(vec3 p, bool col_required) {
     vec4 p4 = mapPetal02(roty(1.0+0.1*cos(3.0*a))*(q-vec3(0.85-0.05*sin(4.0*a),0,0.35-0.05*sin(a))), 0.45, 0.55, col_required);
     const float petal_k = 0.02;
     vec4 petal = smin(p0, smin(smin(p1, p2, petal_k), smin(p3, p4, petal_k), petal_k), petal_k);
+    if (col_required) petal.xyz *= mix(vec3(0.75,0.25,0.2), vec3(1.0,0.9,0.85), smootherstep(1.3-0.8*exp(-0.5*p.z)));
     // filament
     q = vec3(r*cossin(asin(0.999*sin(11.0*a-1.3))/11.0), p.z);
     vec4 f1 = mapFilament02(roty(-0.4)*(q-vec3(0.25+0.15/(1.0+exp(-4.0*(p.z-0.8)))+0.05*cos(5.0*a),0,0)), 1.0+0.1*sin(7.0*a), col_required);
@@ -339,6 +349,8 @@ vec4 mapFlower03(vec3 p, bool col_required) {
 
 vec4 mapFruit01(vec3 p, bool col_required) {
     p *= vec3(1.0,1.05,1.0);
+    float bound = sdEllipsoid(p-vec3(0,0,0.3), vec3(1.4,1.4,1.8));
+    if (bound > 0.0) return vec4(1,0,0, bound+0.1);
     float r = length(p.xy), a = atan(p.y, p.x), b = atan(r, p.z);
     vec3 q;
     q = vec3(length(vec2(r,0.02))*cossin(asin(0.9*sin(2.5*a-0.5))/2.5), p.z);
@@ -416,6 +428,59 @@ vec4 mapFruit02(vec3 p, bool col_required) {
     return d;
 }
 
+vec4 mapSwirl01(vec3 p, bool col_required) {
+    float bound = sdEllipsoid(p-vec3(0,0,0.0), vec3(0.8,0.8,2.0));
+    if (bound > 0.0f) return vec4(1,0,0, bound+0.1);
+    p.z += 1.0+0.1*p.y;
+    vec2 a = -smind(smaxd(8.0*vec2(p.z,1), vec2(0.0,0), 3.0), vec2(4.0*PI,0), 5.0);
+    p.xy = rot2(a.x)*p.xy;
+    float w = 0.25 + 0.3*exp(-sqr(6.0*p.z));
+    float r = 0.1*exp(-1.5*(0.2*p.z+0.1*sin(16.0*p.z)));
+    float k = length(vec2(length(p.xy)*a.y,1.0));
+    float d = sdCapsule((p-vec3(w,0,0))/vec3(1.0,1.0+0.3*k,1.0), 2.5, r);
+    d = d / mix(1.0, max(1.0*pow(k,0.7),0.9), smoothstep(1.0,0.0,10.0*(d-r))) - 0.01;
+    d = smin(1.1*d, 0.5*(d+0.7), 0.1);
+    return vec4(
+        mix(vec3(0.6,0.65,0.0), vec3(0.45,0.4,0.0), 0.5+0.5*sin(10.0*p.x)*sin(10.0*p.y)*sin(10.0*p.z)),
+        d);
+}
+vec4 mapSwirl02(vec3 p, bool col_required) {
+    p.z += 1.0-0.1*p.y;
+    float bound = sdEllipsoid(p-vec3(0,0,1.2), vec3(0.8,0.8,2.0));
+    if (bound > 0.0f) return vec4(1,0,0, bound+0.1);
+    vec2 a = -smind(smaxd(6.0*vec2(p.z-0.5,1), vec2(0.0,0), 2.0), vec2(3.0*PI,0), 5.0);
+    p.xy = rot2(a.x)*p.xy;
+    float w = 0.25 + 0.15*exp(-sqr(6.0*p.z));
+    float r = 0.1*exp(-1.5*(0.2*p.z+0.1*sin(16.0*p.z)));
+    float k = length(vec2(length(p.xy)*a.y,1.0));
+    float d = sdCapsule((p-vec3(w,0,0))/vec3(1.0,1.0+0.3*k,1.0), 2.5, r);
+    d = d / mix(1.0, max(1.0*pow(k,0.7),0.9), smoothstep(1.0,0.0,10.0*(d-r))) - 0.005;
+    d = smin(1.1*d, 0.5*(d+0.7), 0.1);
+    return vec4(
+        mix(vec3(0.6,0.65,0.0), vec3(0.45,0.4,0.0), 0.5+0.5*sin(10.0*p.x)*sin(10.0*p.y)*sin(10.0*p.z)),
+        d);
+}
+vec4 mapSwirl04(vec3 p, bool col_required) {
+    float bound = sdEllipsoid(p-vec3(0.3,-0.2,0.2), vec3(1.8,1.6,2.0));
+    if (bound > 0.0f) return vec4(1,0,0, bound+0.1);
+    p.xz = rot2(0.5)*p.xz;
+    p.z -= 1.0;
+    p.yz = mix(vec2(p.y,p.z), vec2(p.z,-1.6*p.y-0.4*p.z), smootherstep(0.5*(p.z-p.y)+0.5));
+    p.z += 2.0;
+    p.xz = rot2(-0.8*exp(-sqr(p.z-0.0)))*p.xz;
+    vec2 a = -smind(smaxd(9.0*vec2(p.z,1.0), vec2(2.0*PI,0), 3.0), vec2(10.0*PI,0), 5.0);
+    p.xy = rot2(a.x)*p.xy;
+    float k = length(vec2(length(p.xy)*a.y,1.0));
+    float w = 0.25 + 0.01*k + 0.15*exp(-sqr(1.0*(p.z-3.0)));
+    float r = 0.1 - 0.03*exp(-sqr(1.5*(p.z+0.0)));
+    float d = sdCapsule((p-vec3(w,0,-0.5))/vec3(1.1,1.2+0.3*k,1.0), 4.5, r);
+    d = d / mix(1.0, max(1.0*pow(k,0.9),0.9), smoothstep(1.0,0.0,5.0*(d-r))) - 0.0;
+    d = smin(1.1*d, 0.5*(d+0.7), 0.1);
+    return vec4(
+        mix(vec3(0.6,0.65,0.0), vec3(0.45,0.4,0.0), 0.5+0.5*sin(10.0*p.x)*sin(10.0*p.y)*sin(10.0*p.z)),
+        d);
+}
+
 float mapRoot01(vec3 p, int seed) {
     p.x += randt(seed,0.0,0.2)*sin(randt(seed,4.0,4.0)*p.z+2.0*PI*rand(seed));
     p.y += randt(seed,0.0,0.2)*sin(randt(seed,4.0,4.0)*p.z+2.0*PI*rand(seed));
@@ -429,7 +494,7 @@ float mapRoot01(vec3 p, int seed) {
     vec2 a = as * smind(smaxd(f*vec2(p.z,1), vec2(a0,0), 5.0), vec2(a1,0), 5.0);
     p.xy = rot2(a.x)*p.xy;
     float w = randt(seed,0.2,0.1) + randt(seed,0.1,0.05)*sin(randt(seed,4.0,4.0)*p.z+2.0*PI*rand(seed));
-    float r = randt(seed,0.1,0.03)*exp(-(randt(seed,0.5,0.2)*p.z+randt(seed,0.1,0.1)*sin(randt(seed,3.0,3.0)*p.z+2.0*PI*rand(seed))));
+    float r = randt(seed,0.1,0.03)*exp(-(randt(seed,0.3,0.15)*p.z+randt(seed,0.1,0.1)*sin(randt(seed,3.0,3.0)*p.z+2.0*PI*rand(seed))));
     r = smin(r, 0.5, 0.1);
     float k = length(vec2(length(p.xy)*a.y,1.0));
     float d = sdCapsule((p-vec3(w,0,0))/vec3(1.0,1.0+0.2*k,1.0), 2.5, r);
@@ -439,8 +504,8 @@ float mapRoot01(vec3 p, int seed) {
 }
 vec4 mapRoots01(vec3 p, bool col_required) {
     p.y += 0.3*sin(1.8*p.z);
-	float bound = sdEllipsoid(p-vec3(0,0,-0.3), vec3(1.5,1.5,2.5));
-	if (bound > 0.0f) return vec4(1,0,0, bound+0.1);
+    float bound = sdEllipsoid(p-vec3(0,0,-0.3), vec3(1.6,1.6,2.5));
+    if (bound > 0.0f) return vec4(1,0,0, bound+0.1);
     vec4 c = vec4(1,0,0, 1e12), d;
     for (float i=ZERO-1.; i<=1.; i+=1.) {
         for (float j=ZERO-1.; j<=1.; j+=1.) {
@@ -450,26 +515,119 @@ vec4 mapRoots01(vec3 p, bool col_required) {
             q.z = randt(seed,1.0,0.3)*q.z - randt(seed,0.0,0.5);
             d.w = mapRoot01(vec3(1,1,-1)*q, seed);
             if (col_required) {
-                float t = 0.5+randt(seed,0.5,0.2)*sin(randt(seed,4.0,4.0)*p.z+2.0*PI*rand(seed));
+                float t = 0.5+randt(seed,0.5,0.2)*sin(randt(seed,4.0,4.0)*p.z+2.0*PI*rand(seed))*sin(4.0*p.y)*sin(4.0*p.x);
                 d.xyz = mix(vec3(0.3,0.2,0.05), vec3(0.75,0.55,0.25), smootherstep(t));
             }
             c = smin(c, d, 0.02);
         }
     }
+    c.w += 0.02;
     return c;
 }
 
+vec4 mapBody(vec3 p, bool col_required) {
+    p.x = length(vec2(p.x, 0.01));
+    p.z -= 0.1/(pow(p.y-0.5,2.)+1.);
+    p.z += 0.2/(pow(p.y-1.2,2.)+1.);
+    vec3 q;
+    // segments
+    q = vec3(1,1,1.1)*(p-vec3(0,0.05,0));;
+    vec4 s1 = vec4(mix(vec3(0.7,0.1,0.1), vec3(0.8,0.07,0.1), saturate(0.5+3.0*q.y)),
+        sdCapsuleY(q-vec3(0,0,0.04*(cos(8.0*q.y)-1.)), 0.28, 0.15-0.05*q.y));
+    q = vec3(1,1,1.1)*(p-vec3(0,0.8,0));
+    vec4 s2 = vec4(mix(vec3(0.9,0.3,0.4), vec3(1.0,0.7,0.4), saturate(0.5+5.0*q.z)),
+        sdCapsuleY(q-vec3(0,0,1.5*(cos(q.y+0.05)-1.)), 0.22, 0.13-0.05*q.y));
+    q = vec3(1,1,1.1)*(p-vec3(0,1.55,0));
+    vec4 s3 = vec4(mix(vec3(0.9,0.3,0.4), vec3(1.0,0.7,0.4), saturate(0.5+5.0*q.z)),
+        sdCapsuleY(q-vec3(0,0,0.03*(-sin(8.0*q.y)-2.)), 0.3, 0.11-0.03*q.y));
+    q = vec3(1,1,1.2)*(p-vec3(0,2.2,0));
+    vec4 s4 = vec4(mix(vec3(0.9,0.3,0.4), vec3(1.0,0.7,0.4), saturate(0.5+5.0*q.z)),
+        sdCapsuleY(q-vec3(0,0,0.02*(sin(8.0*q.y)-1.)), 0.12, 0.11+0.02*q.y));
+    vec4 s = cmin(cmin(s1, s2), cmin(s3, s4));
+    // rings
+    q = rotx(0.1)*(vec3(1,1,1.1)*(p-vec3(0,-0.39,-0.08)));
+    float r0 = sdTorusY(q, 0.12, 0.06);
+    q = rotx(0.2)*(vec3(1,1,1.1)*(p-vec3(0,0.41,-0.05)));
+    float r1 = sdTorusY(q, 0.08, 0.04);
+    q = rotx(0.3)*(vec3(1,0.8,1.1)*(p-vec3(0,1.13,-0.04)));
+    float r2 = sdTorusY(q, 0.09, 0.04);
+    q = rotx(0.4)*(vec3(1,1,1.1)*(p-vec3(0,1.95,-0.04)));
+    float r3 = sdTorusY(q, 0.08, 0.04);
+    q = rotx(0.1)*(vec3(1.3,1,1.1)*(p-vec3(0.03,2.6,0)));
+    float r4 = sdEllipsoid(q, vec2(0.08-0.2*q.y+0.004*sin(40.0*q.y), 0.2).xyx);
+    vec4 r = vec4(vec3(0.05,0.00,0.02), min(min(r0, r1), min(min(r2, r3), r4)));
+    // head
+    q = vec3(1,1,1.1)*(p-vec3(0,-0.8,-0.1));
+    vec4 h0 = vec4(vec3(0.7,0.2,0.05),
+        pow(dot(pow(max(abs(q)-vec3(0.0,0.3,0.0),vec3(0.)),vec3(4.)),vec3(1.)),0.25)-max(0.2-0.5*q.y*q.y+0.1*q.y,0.));
+    q = p - vec3(0,-0.95,-0.1);
+    vec4 h1 = vec4(vec3(0.3,0.0,0.05), length(q)-0.23);
+    q = p - vec3(0.1,-1.2,-0.1);
+    vec4 eye = vec4(vec3(0.5,0.15,0.07), sdEllipsoid(q, vec3(0.12,0.1,0.15)));
+    vec4 h = smin(smin(h0, h1, 0.1), eye, 0.05);
+    // put them together
+    vec4 d = smin(smin(s, r, 0.03), h, 0.04);
+    return d;
+}
+vec4 mapWing1(vec3 p, bool col_required) {
+    p.x = abs(p.x);
+    vec3 q;
+    q = rotx(0.4)*rotz(0.3)*(p-vec3(1.35,-1.1,-0.05));
+    q.z += min(0.4*q.y*q.y, 1.0);
+    vec3 r = vec3(
+        1.3,
+        max(0.16+0.3/(pow(q.x-0.3,2.)+1.5)+0.2*q.y+0.05*q.x,0.1),
+        0.4*max(0.05+0.03*q.y,0.01));
+    float d = sdEllipsoid(q, r);
+    if (!col_required) return vec4(vec3(1.0), d);
+    q = q / r + vec3(1, 0, 0);
+    float u = 2.0*atan(q.y,q.x);
+    float v = dot(q.xy,q.xy)/(2.0*q.x);
+    float tu = 0.1*sin(47.0*u)+0.1*sin(31.0*u);
+    float tv = -0.1*sin(16.0*v)+0.1*sin(137.0*v)+0.05*sin(73.0*v);
+    float t = (0.5+tv+tu) * 1.0/(1.0+exp(-8.0*(u-v+1.4)));
+    vec3 col = mix(vec3(0.06,0.03,0.01), vec3(0.6,0.5,0.4), t);
+    return vec4(col, d);
+}
+vec4 mapWing2(vec3 p, bool col_required) {
+    p.x = abs(p.x);
+    vec3 q;
+    q = rotx(0.2)*rotz(-0.35)*(p-vec3(1.13,-0.28,-0.05));
+    q.z += min(0.5*q.y*q.y, 1.0);
+    vec3 r = vec3(
+        1.05,
+        max(0.1+0.3/(pow(q.x+0.2,2.)+1.5)+0.2*q.y-0.05*q.x+0.02*exp(2.0*q.x),0.1),
+        0.4*max(0.05+0.03*q.y,0.01));
+    float d = sdEllipsoid(q, r);
+    if (!col_required) return vec4(vec3(1.0), d);
+    q = q / r + vec3(1, 0, 0);
+    float u = 2.0*atan(q.y,q.x);
+    float v = dot(q.xy,q.xy)/(2.0*q.x);
+    float tu = 0.1*sin(47.0*u)+0.1*sin(31.0*u);
+    float tv = -0.1*sin(16.0*v)+0.1*sin(137.0*v)+0.05*sin(73.0*v);
+    float t = (0.5+tv+tu) * 1.0/(1.0+exp(-4.0*(u+0.9)));
+    vec3 col = mix(vec3(0.06,0.03,0.01), vec3(0.6,0.5,0.4), t);
+    return vec4(col, d);
+}
+vec4 mapDragonfly(vec3 p, bool col_required) {
+    float bound = sdBox(p-vec3(0,0.3,-0.1), vec3(2.8,2.4,0.8));
+    if (bound > 0.0f) return vec4(1,0,0, bound+0.1);
+    p.z -= 0.2*length(vec2(p.x, 0.5))-0.2;
+    vec4 body = mapBody(1.2*p, col_required)/1.2;
+    vec4 wing1 = mapWing1(p, col_required);
+    vec4 wing2 = mapWing2(p, col_required);
+    vec4 d = smin(body, cmin(wing1, wing2), 0.02);
+    return d;
+}
 
-vec4 map(vec3 p, bool col_required) {
-    vec4 axes = cmin(cmin(
-        vec4(1,0,0, length(p-vec3(2,0,0))-0.1), vec4(0,0.5,0, length(p-vec3(0,1.5,0))-0.1)),
-        vec4(0,0,1, length(p-vec3(0,0,3))-0.1));
+
+vec4 mapFlowers(vec3 p, bool col_required) {
     vec3 q;
     q = roty(0.4)*rotz(-0.4)*(p-vec3(-0.75,-0.2,0.2));
     vec4 flower1 = mapFlower02(q/vec3(0.35,0.35,0.45), col_required)*vec4(1,1,1,0.35);
-    q = roty(0.2)*rotz(-0.4)*(p-vec3(-0.7,-0.9,0.15));
+    q = roty(0.2)*rotz(-0.4)*(p-vec3(-0.65,-0.93,0.15));
     vec4 fruit1 = mapFruit02(q/vec3(0.2,0.2,0.2), col_required)*vec4(1,1,1,0.2);
-    q = rotx(-0.6)*rotz(-0.5)*(p-vec3(0.1,-0.6,0.2));
+    q = rotx(-0.6)*rotz(-0.5)*(p-vec3(0.05,-0.6,0.2));
     vec4 flower2 = mapFlower01(q/vec3(0.3,0.3,0.4), col_required)*vec4(1,1,1,0.3);
     q = roty(-0.5)*rotz(0.2)*(p-vec3(0.9,0.6,0.35));
     vec4 flower3 = mapFlower02(q/vec3(0.4,0.4,0.4), col_required)*vec4(1,1,1,0.4);
@@ -477,21 +635,51 @@ vec4 map(vec3 p, bool col_required) {
     vec4 flower4 = mapFlower03(q/vec3(0.35,0.35,0.35), col_required)*vec4(1,1,1,0.35);
     q = rotx(1.0)*rotz(-0.6)*(p-vec3(-0.55,0.6,0.25));
     vec4 flower5 = mapFlower01(q/vec3(0.3,0.3,0.4), col_required)*vec4(1,1,1,0.3);
-    q = rotx(0.4)*rotz(-0.2)*(p-vec3(0.3,0.9,0.3));
+    q = rotx(0.4)*rotz(-0.2)*(p-vec3(0.3,0.95,0.3));
     vec4 flower6 = mapFlower03(q/vec3(0.35,0.35,0.4), col_required)*vec4(1,1,1,0.35);
-	q = roty(-0.3)*rotz(0.0)*(p-vec3(0.2,0.1,0.4));
-	vec4 fruit2 = mapFruit02(q/vec3(0.2,0.2,0.2), col_required)*vec4(1,1,1,0.2);
-    q = p.yxz-vec3(0,0.3,-0.8);
-    vec4 roots = mapRoots01(q/vec3(0.6,0.6,0.6), col_required)*0.6;
+    q = roty(-0.3)*rotz(0.0)*(p-vec3(0.27,0.1,0.4));
+    vec4 fruit2 = mapFruit02(q/vec3(0.2,0.2,0.2), col_required)*vec4(1,1,1,0.2);
+    q = roty(-0.3)*rotz(0.5)*(p-vec3(-0.12,-0.15,0.4));
+    vec4 fruit3 = mapFruit01(q/vec3(0.18,0.18,-0.18), col_required)*vec4(1,1,1,0.18);
+    q = roty(0.3)*rotz(-0.5)*(p-vec3(-0.3,0.2,0.5));
+    vec4 fruit4 = mapFruit01(q/vec3(0.18,0.18,-0.18), col_required)*vec4(1,1,1,0.18);
+    q = rotx(0.3)*rotz(0.1)*(p-vec3(-0.14,0.53,0.45));
+    vec4 fruit5 = mapFruit01(q/vec3(0.17,0.16,-0.18), col_required)*vec4(1,1,1,0.16);
+    q = roty(-0.3)*(p-vec3(0.35,0.4,0.8));
+    vec4 leaf1 = mapSwirl01(q/vec3(0.5,0.4,0.5), col_required)*vec4(1,1,1,0.4);
+    q = roty(-0.1)*(p-vec3(0.35,0.4,0.8));
+    vec4 leaf2 = mapSwirl02(q/vec3(0.5,0.4,0.5), col_required)*vec4(1,1,1,0.4);
+    q = rotz(1.5)*(p-vec3(-0.08,0.2,0.7));
+    vec4 leaf3 = mapSwirl04(q/vec3(0.4,0.4,0.4), col_required)*vec4(1,1,1,0.4);
     const float k = 0.01;
-    vec4 c = cmin(axes,
-		smin(
-			smin(
-				smin(smin(smin(flower1, fruit1, k), flower5, k), smin(flower2, flower3, k), k),
-				smin(smin(flower4, flower6, k), fruit2, k),
-			k),
-		roots, k)
-	);
+    vec4 c = smin(
+        smin(
+            smin(smin(smin(flower1, fruit1, k), flower5, k), smin(flower2, flower3, k), k),
+            smin(smin(flower4, flower6, k), fruit2, k),
+        k),
+        smin(
+            smin(smin(fruit3, fruit4, k), fruit5, k),
+            smin(smin(leaf1, leaf2, k), leaf3, k),
+        k),
+    k);
+    return c;
+}
+vec4 map(vec3 p, bool col_required) {
+    vec4 axes = cmin(cmin(
+        vec4(1,0,0, length(p-vec3(2,0,0))-0.1), vec4(0,0.5,0, length(p-vec3(0,1.5,0))-0.1)),
+        vec4(0,0,1, length(p-vec3(0,0,3))-0.1));
+    vec3 q;
+    q = roty(-0.05)*rotx(-0.15)*(p-vec3(0,0,0.0));
+    vec4 flowers = mapFlowers(q/vec3(0.8,0.8,1.0), col_required)*vec4(1,1,1,0.8);
+    q = p.yxz-vec3(0.1,0.3,-0.7);
+    vec4 roots = mapRoots01(q/vec3(0.55,0.55,0.65), col_required)*vec4(1,1,1,0.55);
+    q = roty(-0.1)*rotx(-0.5)*(p-vec3(0,-0.1,2.0));
+    vec4 dragonfly = mapDragonfly(q/vec3(0.4,-0.45,0.5), col_required)*vec4(1,1,1,0.4);
+    const float k = 0.01;
+    vec4 c = cmin(
+        dragonfly,
+        smin(flowers, roots, k)
+    );
     return c;
 }
 
