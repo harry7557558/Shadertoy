@@ -16,6 +16,13 @@ const int MAT_GLASS = 2;
 const int MAT_CONTENT = 3;
 
 
+// rotation matrices
+mat2 rot2(float a) { return mat2(cos(a), sin(a), -sin(a), cos(a)); }
+mat3 rotx(float a) { return mat3(1, 0, 0, 0, cos(a), sin(a), 0, -sin(a), cos(a)); }
+mat3 rotz(float a) { return mat3(cos(a), sin(a), 0, -sin(a), cos(a), 0, 0, 0, 1); }
+mat3 roty(float a) { return mat3(cos(a), 0, -sin(a), 0, 1, 0, sin(a), 0, cos(a)); }
+
+
 // Model object
 
 #ifndef __CPLUSPLUS
@@ -152,7 +159,7 @@ bool intersectGlass(vec3 ro, vec3 rd, inout float t, in float t1, out vec3 n) {
         if (t > t1) return false;
         v = mapGlass(ro+rd*t);
         if (v*v_old<0.) break;
-        dt = clamp(abs(v_old=v), MIN_STEP, STEP);
+        dt = max(abs(v_old=v), MIN_STEP);
     }
     if (v*v_old<0.) {
         float t0 = t-dt, t1 = t;
@@ -205,11 +212,11 @@ bool intersectContent(vec3 ro, vec3 rd, inout float t, in float t1, out vec3 n, 
 
 vec3 light(vec3 rd) {
     const vec3 sunpos = normalize(vec3(0.2, -0.5, 0.2));
-    //vec3 col = sin(20.0*rd.x)*sin(20.0*rd.y)*sin(20.0*rd.z)>0.0 ? vec3(1.0) : vec3(0.8);
-    vec3 col = vec3(0.9+0.2*sin(2.0*rd.x+rd.y));
-    vec3 amb = vec3(1.0) + vec3(2.0) * pow(max(dot(rd, sunpos), 0.), 4.);
+    vec3 col = vec3(0.8);
+    col *= 1.0 + 2.0 * pow(max(dot(rd, sunpos), 0.), 4.);
+    col *= mix(1.0, 4.0, pow(1.0-rd.z, 2.0));
     vec3 sun = (dot(rd,sunpos)>0.9 ? 1.0 : 0.0) * vec3(8.0);
-    return col * 0.5*amb + sun;
+    return 0.5*col + sun;
 }
 
 vec3 mainRender(vec3 ro, vec3 rd) {
@@ -230,7 +237,6 @@ vec3 mainRender(vec3 ro, vec3 rd) {
         if (t > 0.0) {
             min_t = t, min_n = vec3(0, 0, 1);
             min_ro = ro + rd * t, min_rd = rd;
-            col = vec3(0.5);
             material = MAT_PLANE;
         }
 
@@ -247,7 +253,7 @@ vec3 mainRender(vec3 ro, vec3 rd) {
         // content
         t = 0.0;
         if (inside_glass) {
-            if (intersectContent(ro-vec3(0,0,2.8), rd, t, min_t, min_n, col)) {
+            if (intersectContent(ro-vec3(-0.0,0,2.8), rd, t, min_t, min_n, col)) {
                 min_t = t;
                 min_ro = ro + rd * t, min_rd = rd;
                 min_n = normalize(min_n);
@@ -257,7 +263,7 @@ vec3 mainRender(vec3 ro, vec3 rd) {
 
         // update ray
         if (material == MAT_BACKGROUND) {
-            if (iter == 0) return vec3(0.0);
+            //if (iter == 0) return vec3(0.0);
             col = light(rd);
             return m_col * col + t_col;
         }
@@ -266,6 +272,10 @@ vec3 mainRender(vec3 ro, vec3 rd) {
         min_n = dot(rd, min_n) < 0. ? min_n : -min_n;  // ray hits into the surface
         ro = min_ro, rd = min_rd;
         if (material == MAT_PLANE) {
+            // faked light behind the glass
+            vec2 xy = min_ro.xy;
+            float c = length(rot2(-1.0)*(xy-vec2(0.0,15.0))/vec2(2.0,1.0))-10.0;
+            col = vec3(0.5)-0.3*tanh(0.4*c);
             rd = sampleCookTorrance(-rd, min_n, 0.01, 0.1, 0.01, col, col, m_col);
         }
         else if (material == MAT_GLASS) {
@@ -275,13 +285,18 @@ vec3 mainRender(vec3 ro, vec3 rd) {
         }
         else if (material == MAT_CONTENT) {
             rd = sampleCookTorrance(-rd, min_n, 0.5, 0.8, 0.4, vec3(1.0), vec3(1.0), m_col);
-            m_col *= 1.6*pow(col, vec3(1.0));
+            m_col *= 1.4*pow(col, vec3(0.9));
             if (dot(rd, min_n) < 0.0) inside_object = !inside_object;
         }
         if (m_col == vec3(0.0)) return t_col;
         if (inside_object) return 1e12f*vec3(1,-1,-1);  // red warning
     }
     return m_col + t_col;
+}
+
+vec2 randomUnitDisk() {
+    float a = 2.0*PI*rand01();
+    return sqrt(rand01())*vec2(cos(a), sin(a));
 }
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
@@ -291,17 +306,29 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     seed = randu() + 239u*uint(fragCoord.x);
     seed = randu() + 197u*uint(iFrame+1);
 
+    // camera parameters
+    float rx = 0.34, rz = -7.6;
+  #if 0
+    if (iMouse.y!=0.0) rx = 1.8*(iMouse.y/iResolution.y)-0.3;
+    if (iMouse.z!=0.0) rz = -iMouse.x/iResolution.x*4.0*3.14;
+  #endif
+    const float SCALE = 1.5;  // larger = smaller (more view field)
+    const vec3 CENTER = vec3(0, 0, 3.0);
+    const float DIST = 20.0;  // larger = smaller
+    const float VIEW_FIELD = 0.4;  // larger = larger + more perspective
+    const float APERTURE = 0.2;  // larger = blurred
+
     // camera
-    float rx = iMouse.y==0.0 ? 0.33 : 1.8*(iMouse.y/iResolution.y)-0.3;
-    float rz = iMouse.x==0.0 ? -7.6 : -iMouse.x/iResolution.x*4.0*3.14;
-    rx = 0.33, rz = -7.6;
     vec3 w = vec3(cos(rx)*vec2(cos(rz),sin(rz)), sin(rx));
     vec3 u = vec3(-sin(rz),cos(rz),0);
     vec3 v = cross(w,u);
-    vec3 ro = 20.0*w + vec3(0, 0, 3.0);
-    vec2 uv = 5.0*(2.0*(fragCoord.xy+vec2(rand01(),rand01())-0.5)/iResolution.xy - vec2(1.0));
-    vec3 rd = mat3(u,v,-w)*vec3(uv*iResolution.xy, 8.0*length(iResolution.xy));
+    vec3 ro = DIST*w + CENTER;
+    vec2 uv = SCALE*(2.0*(fragCoord.xy+vec2(rand01(),rand01())-0.5)/iResolution.xy-1.0);
+    vec2 sc = iResolution.xy/length(iResolution.xy);
+    vec2 offset = APERTURE*randomUnitDisk();
+    vec3 rd = mat3(u,v,-w)*vec3(VIEW_FIELD*uv*sc+offset/DIST, 1.0);
     rd = normalize(rd);
+    ro -= offset.x*u+offset.y*v;
 
     // calculate pixel color
     vec3 col = mainRender(ro, rd);

@@ -625,7 +625,7 @@ vec4 mapFlowers(vec3 p, bool col_required) {
     vec3 q;
     q = roty(0.4)*rotz(-0.4)*(p-vec3(-0.75,-0.2,0.2));
     vec4 flower1 = mapFlower02(q/vec3(0.35,0.35,0.45), col_required)*vec4(1,1,1,0.35);
-    q = roty(0.2)*rotz(-0.4)*(p-vec3(-0.65,-0.93,0.15));
+    q = roty(0.3)*rotz(-0.4)*(p-vec3(-0.55,-0.85,0.15));
     vec4 fruit1 = mapFruit02(q/vec3(0.2,0.2,0.2), col_required)*vec4(1,1,1,0.2);
     q = rotx(-0.6)*rotz(-0.5)*(p-vec3(0.05,-0.6,0.2));
     vec4 flower2 = mapFlower01(q/vec3(0.3,0.3,0.4), col_required)*vec4(1,1,1,0.3);
@@ -670,11 +670,11 @@ vec4 map(vec3 p, bool col_required) {
         vec4(0,0,1, length(p-vec3(0,0,3))-0.1));
     vec3 q;
     q = roty(-0.05)*rotx(-0.15)*(p-vec3(0,0,0.0));
-    vec4 flowers = mapFlowers(q/vec3(0.8,0.8,1.0), col_required)*vec4(1,1,1,0.8);
+    vec4 flowers = mapFlowers(q/vec3(0.8,0.8,0.95), col_required)*vec4(1,1,1,0.8);
     q = p.yxz-vec3(0.1,0.3,-0.7);
     vec4 roots = mapRoots01(q/vec3(0.55,0.55,0.65), col_required)*vec4(1,1,1,0.55);
     q = roty(-0.1)*rotx(-0.5)*(p-vec3(0,-0.1,2.0));
-    vec4 dragonfly = mapDragonfly(q/vec3(0.4,-0.45,0.5), col_required)*vec4(1,1,1,0.4);
+    vec4 dragonfly = mapDragonfly(q/vec3(0.35,-0.4,0.45), col_required)*vec4(1,1,1,0.35);
     const float k = 0.01;
     vec4 c = cmin(
         dragonfly,
