@@ -59,16 +59,6 @@ vec2 randSector(float angle, float rand1, float rand2) {
     return v*vec2(cos(u), sin(u));
 }
 
-// x²-|x|y+y² < 1
-vec2 randHeart(float rand1, float rand2) {
-    float u = 2.0*PI*rand1;  // θ
-    float v = sqrt(rand2);  // r
-    vec2 c = v*vec2(cos(u), sin(u));  // unit circle
-    c = mat2(1.0,1.0,-0.577,0.577)*c;  // ellipse
-    if (c.x<0.0) c.y=-c.y;  // mirror
-    return c;
-}
-
 // ellipse with major and minor radius
 vec2 randEllipse(float rx, float ry, float rand1, float rand2) {
     float u = 2.0*PI*rand1;  // θ
@@ -77,77 +67,14 @@ vec2 randEllipse(float rx, float ry, float rand1, float rand2) {
     return vec2(rx, ry) * circ;  // linear transform
 }
 
-// ring formed by two concentric circles with radius r0 and r1
-vec2 randConcentric(float r0, float r1, float rand1, float rand2) {
+// x²-|x|y+y² < 1
+vec2 randHeart(float rand1, float rand2) {
     float u = 2.0*PI*rand1;  // θ
-    float v = sqrt(mix(r0*r0, r1*r1, rand2));  // r
-    return v * vec2(cos(u), sin(u));  // polar to Cartesian
-}
-
-// intersection of two circles with centers (0,±c) and radius r
-vec2 randIntersection(float c, float r, float rand1, float rand2) {
-    // https://www.desmos.com/calculator/sctxdxh1td
-    float u = rand1;
-    float v = 2.0*rand2-1.0;
-    float x1 = sqrt(r*r-c*c);
-    float i1 = 0.5*r*r*asin(x1/r)+0.5*x1*sqrt(r*r-x1*x1)-c*x1;
-    u = 2.0*i1*u - i1;
-    float x = 0.0;
-    for (int iter=0; iter<6; iter++) {  // Newton-Raphson
-        float cdf = 0.5*(r*r*asin(x/r)+x*sqrt(r*r-x*x))-c*x;
-        float pdf = sqrt(r*r-x*x)-c;
-        x -= (cdf-u)/pdf;
-    }
-    float y = (sqrt(r*r-x*x)-c) * v;
-    return vec2(x, y);
-}
-
-// union of two circles with centers (±c,0) and radius r
-vec2 randUnion(float c, float r, float rand1, float rand2) {
-    // https://www.desmos.com/calculator/ddyum0rkgw
-    float u = 2.0*rand1-1.0;
-    float v = 2.0*rand2-1.0;
-    float s = sign(u);
-    float x1 = r+c;
-    float h0 = sqrt(r*r-c*c);
-    float i0 = -0.5*(c*h0+r*r*atan(c/h0));
-    float i1 = 0.25*PI*r*r;
-    u = mix(i0, i1, abs(u));
-    float x = c;  // start at a point of inflection
-    for (int iter=0; iter<6; iter++) {  // Newton-Raphson
-        float pdf = sqrt(r*r-(x-c)*(x-c));
-        float cdf = 0.5*((x-c)*pdf+r*r*atan((x-c)/pdf));
-        x -= (cdf-u)/pdf;
-    }
-    float y = sqrt(r*r-(x-c)*(x-c)) * v;
-    return vec2(s*x, y);
-}
-
-// subtraction of a circle with center (c,0) from a circle with (0,0)
-vec2 randSubtraction(float c, float r, float rand1, float rand2) {
-    // https://www.desmos.com/calculator/jk1okdxoks
-    float u = rand1;
-    float v = 2.0*rand2-1.0;
-    float x1 = 0.5*c;
-    float y1 = sqrt(r*r-0.25*c*c);
-    float a1 = y1*c;
-    float i1 = 0.5*(x1*sqrt(r*r-x1*x1)+r*r*asin(x1/r))-x1*y1;
-    float a2 = 2.0*i1;
-    float th = a1/(a1+a2);
-    if (u < th) {
-        float y = y1*v;
-        float x = c*(u/th) - sqrt(r*r-y*y);
-        return vec2(x, y);
-    }
-    u = i1 * (2.*((u-th)/(1.-th)) - 1.);
-    float x = 0.0;
-    for (int iter=0; iter<6; iter++) {  // Newton-Raphson
-        float cdf = 0.5*(x*sqrt(r*r-x*x)+r*r*asin(x/r))-y1*x;
-        float pdf = sqrt(r*r-x*x)-y1;
-        x -= (cdf-u)/pdf;
-    }
-    float y = sign(v) * (y1+(sqrt(r*r-x*x)-y1)*abs(v));
-    return vec2(x, y);
+    float v = sqrt(rand2);  // r
+    vec2 c = v*vec2(cos(u), sin(u));  // unit circle
+    c = mat2(1.0,1.0,-0.577,0.577)*c;  // ellipse
+    if (c.x<0.0) c.y=-c.y;  // mirror
+    return c;
 }
 
 // -1 <= x,y < 1
@@ -194,6 +121,112 @@ vec2 randStar(float n, float rand1, float rand2) {
     return p / (n*sin(2.*PI/n)/PI);  // normalize size
 }
 
+// ring formed by two concentric circles with radius r0 and r1
+vec2 randConcentric(float r0, float r1, float rand1, float rand2) {
+    float u = 2.0*PI*rand1;  // θ
+    float v = sqrt(mix(r0*r0, r1*r1, rand2));  // r
+    return v * vec2(cos(u), sin(u));  // polar to Cartesian
+}
+
+// intersection of two circles with centers (0,±c) and radius r
+vec2 randIntersection(float c, float r, float rand1, float rand2) {
+    // https://www.desmos.com/calculator/sctxdxh1td
+    float u = rand1;
+    float v = 2.0*rand2-1.0;
+    float x1 = sqrt(r*r-c*c);  // x range [-x1, x1]
+    float i1 = 0.5*r*r*asin(x1/r)+0.5*x1*sqrt(r*r-x1*x1)-c*x1;  // area under the curve from 0 t0 x1
+    u = 2.0*i1*u - i1;  // u = Integral[0,x1,sqrt(x^2+y^2-c)]
+    float x = 0.0;  // solve for the x-coordinate
+    for (int iter=0; iter<6; iter++) {  // Newton-Raphson
+        float cdf = 0.5*(r*r*asin(x/r)+x*sqrt(r*r-x*x))-c*x;
+        float pdf = sqrt(r*r-x*x)-c;
+        x -= (cdf-u)/pdf;
+    }
+    float y = (sqrt(r*r-x*x)-c) * v;  // y-coordinate
+    return vec2(x, y);
+}
+
+// union of two circles with centers (±c,0) and radius r
+vec2 randUnion(float c, float r, float rand1, float rand2) {
+    // https://www.desmos.com/calculator/ddyum0rkgw
+    float u = 2.0*rand1-1.0;
+    float v = 2.0*rand2-1.0;
+    float s = sign(u);
+    float x1 = r+c;  // (x1,0)
+    float h0 = sqrt(r*r-c*c);  // (0,h0)
+    float i0 = -0.5*(c*h0+r*r*atan(c/h0));  // defaultIntegral(0.0)
+    float i1 = 0.25*PI*r*r;  // defaultIntegral(1.0)
+    u = mix(i0, i1, abs(u));  // x = defaultIntegral(u)
+    float x = c;  // iteration starts at a point of inflection
+    for (int iter=0; iter<6; iter++) {  // Newton-Raphson, solve for x
+        float pdf = sqrt(r*r-(x-c)*(x-c));
+        float cdf = 0.5*((x-c)*pdf+r*r*atan((x-c)/pdf));
+        x -= (cdf-u)/pdf;
+    }
+    float y = sqrt(r*r-(x-c)*(x-c)) * v;  // y-coordinate
+    return vec2(s*x, y);
+}
+
+// subtraction of a circle with center (c,0) from a circle with (0,0)
+vec2 randSubtraction(float c, float r, float rand1, float rand2) {
+    // https://www.desmos.com/calculator/jk1okdxoks
+    float u = rand1;
+    float v = 2.0*rand2-1.0;
+    float x1 = 0.5*c;  // x in [-r, x1]
+    float y1 = sqrt(r*r-0.25*c*c);  // rightmost (x1,±y1)
+    float a1 = y1*c;  // area of the middle part
+    float i1 = 0.5*(x1*sqrt(r*r-x1*x1)+r*r*asin(x1/r))-x1*y1;
+    float a2 = 2.0*i1;  // area of the top/bottom part
+    float th = a1/(a1+a2);  // decide the point lie in which part
+    if (u < th) {
+        float y = y1*v;  // y-coordinate
+        float x = c*(u/th) - sqrt(r*r-y*y);  // x-coordinate, shear a rectangle
+        return vec2(x, y);
+    }
+    u = i1 * (2.*((u-th)/(1.-th)) - 1.);  // x = defaultIntegral(u)
+    float x = 0.0;  // solve for x-coordinate
+    for (int iter=0; iter<6; iter++) {  // Newton-Raphson
+        float cdf = 0.5*(x*sqrt(r*r-x*x)+r*r*asin(x/r))-y1*x;
+        float pdf = sqrt(r*r-x*x)-y1;
+        x -= (cdf-u)/pdf;
+    }
+    float y = sign(v) * (y1+(sqrt(r*r-x*x)-y1)*abs(v));  // y-coordinate, note that v in [-1, 1)
+    return vec2(x, y);
+}
+
+// r(θ) = 1-cos(θ)
+vec2 randCardioid(float rand1, float rand2) {
+    // integrate (1-cos(θ))², find the inverse on [0,2π)
+    float u = 3.0*PI*rand1;  // integral is 3π
+    float v = sqrt(rand2);  // r
+    float theta = PI;  // iteration starting point
+    for (int iter=0; iter<10; iter++) {
+        float cdf = 0.25*(sin(2.0*theta)-8.0*sin(theta)+6.0*theta);  // integral
+        float pdf = (1.0-cos(theta))*(1.0-cos(theta));  // area element
+        theta -= (cdf-u)/pdf;  // Newton-Raphson
+    }
+    float r = 1.0-cos(theta);  // polar equation
+    return v * r * vec2(cos(theta), sin(theta));  // polar coordinate
+}
+
+// r(θ) = cos(nθ)
+vec2 randRose(float n, float rand1, float rand2) {
+    // integrate cos(nθ)², split into n intervals and inverse in [-π/2n,π/2n)
+    float u = PI*rand1;  // integral in [0,2π) is π
+    float v = sqrt(rand2);  // r
+    float ui = PI/n*floor(2.0*n/PI*u);  // center of each "petal"
+    float uf = mod(u,PI/(2.0*n))-PI/(4.0*n);  // parameter of each "petal", integralOfCosNThetaSquared(θ)
+    float theta = 0.0;  // iteration starting point
+    for (int iter=0; iter<9; iter++) {
+        float cdf = 0.5*theta + sin(2.0*n*theta)/(4.0*n);  // integral of cos(nθ)²
+        float pdf = 0.5 + 0.5*cos(2.0*n*theta);  // cos(nθ)²
+        theta -= (cdf-uf)/pdf;  // Newton-Raphson
+    }
+    theta = ui + theta;  // move to petal
+    float r = cos(n*theta);  // polar equation
+    return v * r * vec2(cos(theta), sin(theta));  // polar coordinate
+}
+
 
 // random number generator
 float vanDerCorput(float n, float b) {
@@ -227,18 +260,24 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float rand1 = vanDerCorput(seed, 2.);
     float rand2 = vanDerCorput(seed, 3.);
     vec2 rnd;
+
     //rnd = randCircle(rand1, rand2);
     //rnd = randSector(0.8*PI, rand1, rand2);
-    rnd = randHeart(rand1, rand2);
     rnd = randEllipse(1.2, 0.8, rand1, rand2);
-    //rnd = randConcentric(0.6, 1.1, rand1, rand2);
-    rnd = randIntersection(0.9, 1.6, rand1, rand2);
-    rnd = randUnion(0.6, 0.8, rand1, rand2);
-    rnd = randSubtraction(1.0, 1.0, rand1, rand2);
+    rnd = randHeart(rand1, rand2);
+
     //rnd = randSquare(rand1, rand2);
     //rnd = randQuad(vec2(-1.0,-1.0), vec2(0.8,-0.9), vec2(1.0,1.2), vec2(-0.4,0.8), rand1, rand2);
     //rnd = randPolygon(5., rand1, rand2);
     //rnd = randStar(5., rand1, rand2);
+
+    //rnd = randConcentric(0.6, 1.1, rand1, rand2);
+    //rnd = randIntersection(0.9, 1.6, rand1, rand2);
+    rnd = randUnion(0.6, 0.8, rand1, rand2);
+    //rnd = randSubtraction(1.0, 1.0, rand1, rand2);
+
+    rnd = randCardioid(rand1, rand2);
+    rnd = randRose(5., rand1, rand2);
 
     // camera
     vec3 ro = POS+vec3(0,DIST,0);
