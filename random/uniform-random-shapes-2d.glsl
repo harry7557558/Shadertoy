@@ -1,51 +1,39 @@
 #iChannel0 "self"
 
-// Showcase generating uniformly random points inside 2D shapes
+// An idea to showcase generating uniformly random points inside 2D shapes
 // Each random function takes exactly two random values between 0 and 1, no rejection sampling
 
 // Functions are derived based on the following principles:
-// For circles and other curves, solve for a constant Jacobian (equals the reciprocal of shape area)
+// For circles/spiral, solve for a constant Jacobian (equals the reciprocal of shape area)
 // For polygons/stars, divide into multiple triangles
-// For results of boolean operations of circles, parameterize and apply inverse CDF sampling
+// For explicit curves, apply inverse CDF sampling
+// If the inverse function cannot be solved analytically, start Newton-Raphson iteration at a point of inflection
+
+// Top to bottom, left to right:
+// - a circle
+// - a sector
+// - an ellipse
+// - a piecewise-elliptical heart
+// - a square
+// - a convex quadrilateral
+// - a regular polygon
+// - a regular polygonal star
+// - the area between two concentric circles
+// - the intersection of two circles
+// - the union of two circles
+// - the subtraction of two circles
+// - a cosine-based vesica-like shape
+// - a cardioid
+// - a rose curve
+// - a logarithmic spiral
 
 
 #define PI 3.1415926
 
 
-vec3 intersectRay(vec3 ro, vec3 rd) {
-    // inspired by https://www.shadertoy.com/view/MdfBRX by BigWIngs
-    float t = -(ro.z+2.0)/rd.z;
-    vec3 p = ro+rd*t;
-    vec3 col = rd.z > 0.0 ?
-         mix(vec3(0.0), 0.3*vec3(0.2,0.5,0.8), pow(rd.z,1.0)) :  // sky
-         abs(p.x)<12.0 ? 0.3*vec3(0.05,0.06,0.06) : 0.3*vec3(0.04,0.05,0.02);  // road
-    // all distance are in meters
-    for (float d=10.0; d<=120.0; d+=10.0) {  // street light
-        t = -(ro.y+d)/rd.y;
-        p = ro+rd*t;
-        p.x = abs(p.x);
-        if (length(p.xz-vec2(8.0,5.0))<0.15)
-            col += 20.0*vec3(1.0,0.8,0.5);
-    }
-    for (float d=4.0; d<=54.0; d+=10.0) {  // head light
-        t = -(ro.y+d)/rd.y;
-        p = ro+rd*t;
-        p.x = abs(p.x+4.0);
-        if (length(p.xz-vec2(2.0,-0.5))<0.1)
-            col += 15.0*vec3(0.8,0.8,1.0);
-    }
-    for (float d=6.0; d<=56.0; d+=10.0) {  // tail light
-        t = -(ro.y+d)/rd.y;
-        p = ro+rd*t;
-        p.x = abs(p.x-4.0);
-        if (length(p.xz-vec2(2.0,-0.5))<0.08)
-            col += 10.0*vec3(1.0,0.1,0.0);
-    }
-    return col;
-}
+// ================ RANDOM FUNCTIONS START ================
 
-
-// circle with radius 1
+// unit circle
 vec2 randCircle(float rand1, float rand2) {
     float u = 2.0*PI*rand1;  // θ
     float v = sqrt(rand2);  // r
@@ -194,6 +182,23 @@ vec2 randSubtraction(float c, float r, float rand1, float rand2) {
     return vec2(x, y);
 }
 
+// |y| < cos(x)-k
+vec2 randCosine(float k, float rand1, float rand2) {
+    float u = 2.0*rand1-1.0;  // related to x
+    float v = 2.0*rand2-1.0;  // related to y
+    float x1 = acos(k);  // maximum x
+    float y1 = sin(x1) - k*x1;  // a quarter of area
+    float yt = u*y1;  // randomly chosen area position
+    float x = 0.0;  // start iteration
+    for (int iter=0; iter<6; iter++) {  // Newton-Raphson
+        float cdf = sin(x)-k*x;
+        float pdf = cos(x)-k;
+        x -= (cdf-yt)/pdf;
+    }
+    float y = cos(x)-k;  // calculate y from x
+    return vec2(x, y*v);  // apply random to y
+}
+
 // r(θ) = 1-cos(θ)
 vec2 randCardioid(float rand1, float rand2) {
     // integrate (1-cos(θ))², find the inverse on [0,2π)
@@ -227,8 +232,42 @@ vec2 randRose(float n, float rand1, float rand2) {
     return v * r * vec2(cos(theta), sin(theta));  // polar coordinate
 }
 
+// logarithmic spiral, solvable analytically
+vec2 randSpiral(float k, float a0, float a1, float rand1, float rand2) {
+    float s0 = exp(2.0*PI*k*a0), s1 = exp(2.0*PI*k*a1);  // r = s*exp(kθ)
+    // (x,y)=s*exp(kθ)*(cos(θ),sin(θ)), ∂(x,y)/∂(s,θ)=s*exp(2kθ), s*exp(2kθ)*∂(s,θ)/∂(u,v)=(s1²-s0²)/4k
+    // ∂u∂v=(2s/(s1²-s0²))∂s*(2kexp(2kθ))∂θ, integrate and invert to find θ(u) and s(v)
+    float u = rand1;  // for angle
+    float v = rand2;  // for distance
+    float theta = log(1.0-u)/(2.0*k);  // θ(u)
+    float s = sqrt(mix(s0*s0, s1*s1, v));  // s(v)
+    return s * exp(k*theta) * vec2(cos(theta),sin(theta));  // formula
+}
 
-// random number generator
+// ================ RANDOM FUNCTIONS END. ================
+
+
+
+// scene
+vec3 intersectRay(vec3 ro, vec3 rd) {
+    vec3 col = mix(vec3(0.0), 0.1*vec3(0.2,0.3,0.8), 0.5+0.5*sin(4.0*rd.x)*cos(4.0*rd.y)*sin(4.0*rd.z));
+    vec3 p;
+    // red
+    p = ro+rd*(-(ro.y+4.0)/rd.y);
+    if (length(p.xz-vec2(-0.8,-0.8))<0.2) col+=20.0*vec3(1.0,0.3,0.1);
+    // yellow
+    p = ro+rd*(-(ro.y+10.0)/rd.y);
+    if (length(p.xz-vec2(3.0,2.0))<0.2) col+=20.0*vec3(1.0,0.8,0.5);
+    // blue
+    p = ro+rd*(-(ro.y+20.0)/rd.y);
+    if (length(p.xz-vec2(0.0,-1.5))<0.2) col+=20.0*vec3(0.1,0.6,1.0);
+    // green
+    p = ro+rd*(-(ro.y+50.0)/rd.y);
+    if (length(p.xz-vec2(-12.0,1.0))<0.2) col+=20.0*vec3(0.1,1.0,0.4);
+    return col;
+}
+
+// quasi-random
 float vanDerCorput(float n, float b) {
     float x = 0.0;
     float e = 1.0 / b;
@@ -254,39 +293,47 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     const float SCALE = 1.5;  // larger = smaller (more view field)
     const float DIST = 0.2;  // larger = smaller
     const float VIEW_FIELD = 0.5;  // larger = larger + more perspective
-    const float APERTURE = 0.01;  // larger = blurred
+    const float APERTURE = 0.02;  // larger = blurred
 
     // sample aperture shape
     float rand1 = vanDerCorput(seed, 2.);
     float rand2 = vanDerCorput(seed, 3.);
     vec2 rnd;
 
-    //rnd = randCircle(rand1, rand2);
-    //rnd = randSector(0.8*PI, rand1, rand2);
-    rnd = randEllipse(1.2, 0.8, rand1, rand2);
-    rnd = randHeart(rand1, rand2);
-
-    //rnd = randSquare(rand1, rand2);
-    //rnd = randQuad(vec2(-1.0,-1.0), vec2(0.8,-0.9), vec2(1.0,1.2), vec2(-0.4,0.8), rand1, rand2);
-    //rnd = randPolygon(5., rand1, rand2);
-    //rnd = randStar(5., rand1, rand2);
-
-    //rnd = randConcentric(0.6, 1.1, rand1, rand2);
-    //rnd = randIntersection(0.9, 1.6, rand1, rand2);
-    rnd = randUnion(0.6, 0.8, rand1, rand2);
-    //rnd = randSubtraction(1.0, 1.0, rand1, rand2);
-
-    rnd = randCardioid(rand1, rand2);
-    rnd = randRose(5., rand1, rand2);
+    ivec2 shape_id = ivec2(floor(4.0*fragCoord.xy/iResolution.xy));
+    if (shape_id.y==3) {
+        if (shape_id.x==0) rnd = randCircle(rand1, rand2);
+        if (shape_id.x==1) rnd = randSector(0.8*PI, rand1, rand2);
+        if (shape_id.x==2) rnd = randEllipse(1.2, 0.8, rand1, rand2);
+        if (shape_id.x==3) rnd = randHeart(rand1, rand2);
+    }
+    if (shape_id.y==2) {
+        if (shape_id.x==0) rnd = randSquare(rand1, rand2);
+        if (shape_id.x==1) rnd = randQuad(vec2(-1.0,-1.0), vec2(0.8,-0.9), vec2(1.0,1.2), vec2(-0.4,0.8), rand1, rand2);
+        if (shape_id.x==2) rnd = randPolygon(5., rand1, rand2);
+        if (shape_id.x==3) rnd = randStar(5., rand1, rand2);
+    }
+    if (shape_id.y==1) {
+        if (shape_id.x==0) rnd = randConcentric(0.6, 1.1, rand1, rand2);
+        if (shape_id.x==1) rnd = randIntersection(0.9, 1.6, rand1, rand2);
+        if (shape_id.x==2) rnd = randUnion(0.6, 0.8, rand1, rand2);
+        if (shape_id.x==3) rnd = randSubtraction(1.0, 1.0, rand1, rand2);
+    }
+    if (shape_id.y==0) {
+        if (shape_id.x==0) rnd = randCosine(0.4, rand1, rand2);
+        if (shape_id.x==1) rnd = randCardioid(rand1, rand2);
+        if (shape_id.x==2) rnd = randRose(5., rand1, rand2);
+        if (shape_id.x==3) rnd = randSpiral(0.2, -0.1, 0.3, rand1, rand2);
+    }
 
     // camera
     vec3 ro = POS+vec3(0,DIST,0);
-    vec2 randuv = vec2(vanDerCorput(seed,5.), vanDerCorput(seed, 7.));
-    vec2 uv = SCALE*(2.0*(fragCoord.xy+randuv-0.5)/iResolution.xy-1.0);
+    vec2 randuv = vec2(vanDerCorput(seed,5.), vanDerCorput(seed,7.));
+    vec2 uv = SCALE*(2.0*fract(4.0*(fragCoord.xy+randuv-0.5)/iResolution.xy)-1.0);
     vec2 sc = iResolution.xy/length(iResolution.xy);
     vec2 offset = APERTURE*rnd;
     ro.xz += offset;
-    vec3 rd = vec3(VIEW_FIELD*uv*sc+vec2(-0.2,0.0)-offset/DIST, -1.0).xzy;
+    vec3 rd = vec3(VIEW_FIELD*uv*sc+vec2(-0.25,0.0)-offset/DIST, -1.0).xzy;
 
     // calculate pixel color
     vec3 col = intersectRay(ro, rd);
